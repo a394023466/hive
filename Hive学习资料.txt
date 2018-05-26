@@ -1,0 +1,297 @@
+Hive定义：
+		1.Hive是FaceBook开源的用于解决海量的结构化数据统计的一个工具
+		2.Hive是Hadoop的一个数据仓库，他可以把结构化的数据映射成一张表，并提供类SQL查询功能
+		3.适合离线查询
+		4.将SQL转换成MapReduce程序
+		5.hive就是一个客户端
+		
+	*注意* 不同部门用到的hive版本可能不一样，所以我们要指定hive数据存储在hdfs的目录，来区别不同部门的不同业务需求
+
+Hive：
+	处理的数据存储：HDFS
+	处理数据的分析计算：MapReduce，
+	运行处理数据的计算：在Yarn上
+Hive功能：
+		ETL功能：提取，转换，加载
+		结构化查询功能：HQL
+Hive架构：
+
+		1.MetaStore：Hive表的元数据，表的结构化信息（字段，名称，数据文件的位置），存储到Mysql中
+		2.Driver：驱动，引擎。包含三个部分 ①解析器、②编译器、③优化器、④转换成物理执行计划器
+	
+Hive跟根据文件格式创建表与插入数据：
+						创建表：1.create table db_hive.mylog(login_type int,login_user string,login_ip string,login_date string) ROW FORMAT DELIMITED FIELDS TERMINATED  BY '\t'
+								2（该表示分区表）. create table if not exists db_hive.log (login_type int,login_user string,login_ip string,login_date string) ROW FORMAT DELIMITED FIELDS TERMINATED  BY '\t' LOCATION '/user/hive/datas/'
+						将特定格式的文本加载到表中：load data local inpath '/opt/data/table' overwrite into table db_hive.kty partition (字段名=字段值);  	#local：不加则默认加载dfs上的数据，并且hdfs上被加载的数据当加载到hive表中hdfs上的被加载的数据会被删除，
+																																									加上是加载本地文件
+																																							#overwrite：是否覆盖原有数据
+						
+						*注意*：1.当我们多个人同时使用hive的时候如果不配置Mysql来存储MetaStore，那么他就会默认的把MetaStore存储在内存中，并且
+								  只能启动一个hive客户端。
+								2.Mysql与Hive安装在同一台机器上与安装在不同机器上的配置是不同的，有区别的。
+								3.当我们加载数据到表中要指定那个数据库。
+						
+						
+						查看系统安装了某个软件命令：rpm -qa|grep mysql 
+						卸载某个软件：rpm -e --nodeps xxxxxx
+
+Hive基本的操作：
+				1.创建数据库：create database xxx；
+				2.使用数据库：use xxx;
+				3.查看表的基本信息：desc 表名
+				4.查看表的详细信息：desc extended 表名
+				5.查看表格式化以后的详细信息：desc formatted kty_authlog;
+				6.查询hive自带的函数： show functions;
+				7.查看hive自带函数的详细用法：desc function extended 函数名
+				8.清除一个表的数据：truncate table 表名
+				9.改变表名：alter table 原表名 rename to 新表名
+				10.查看分区表有几个分区：show partitions 表名
+Hive交互式命令行的基本操作与详解：hive -help
+				1.hive -e（不进入hive交互式命令里查询数据）: hive -e "select * from  kty";
+				2.hive -f（不进入hive交互式命令行里利用写好sql的文本文件来执行查询数据，sql里的表一定要指定数据库）：hive -f /opt/data/hive.sql；
+				3.hive -i（用于初始化sql用的）
+				4.!ls /opt/data/（在hive交互式命令行中操作本地文件）!ls /opt/data/
+				
+Hive创建表的语法：									
+				CREATE [TEMPORARY] [EXTERNAL] TABLE [IF NOT EXISTS] [db_name.]table_name   	#[IF NOT EXISTS]：如果表不存在就自动创建
+																							#[db_name.]：数据库名
+																							
+				  [(col_name data_type [COMMENT col_comment], ... [constraint_specification])]	#col_name：字段名
+																								#data_type：字段类型
+																								# [COMMENT col_comment]：对字段的注释
+				  [COMMENT table_comment] #对表的注释
+				  
+				  [PARTITIONED BY (col_name data_type [COMMENT col_comment], ...)] #分区字段不能与表里的字段相同
+				  [CLUSTERED BY (col_name, col_name, ...) [SORTED BY (col_name [ASC|DESC], ...)] INTO num_buckets BUCKETS]
+				  [SKEWED BY (col_name, col_name, ...)                  -- (Note: Available in Hive 0.10.0 and later)]
+					 ON ((col_value, col_value, ...), (col_value, col_value, ...), ...)
+					 [STORED AS DIRECTORIES]
+					 
+				  [
+				   [ROW FORMAT row_format] #指定行分隔方式，row_format在下边有对应的分隔方式
+				   [STORED AS file_format] #指定文件的类型
+					 | STORED BY 'storage.handler.class.name' [WITH SERDEPROPERTIES (...)]  
+				  ]
+				  [LOCATION hdfs_path] #创建表的时候默认指定的数据库与hdfs路径
+				  [TBLPROPERTIES (property_name=property_value, ...)]   -- (Note: Available in Hive 0.6.0 and later)
+				  [AS select_statement];   #根据已知的表来创建一个新的表如 create TABLE xx IF NOT EXISTS db_hive.user AS select name,age from xxx(已存在的表)，并将对应的列的数据拷贝出来; 
+				 
+				CREATE [TEMPORARY] [EXTERNAL] TABLE [IF NOT EXISTS] [db_name.]table_name   #根据已知的表来创建一个新的表如 create TABLE  IF NOT EXISTS xx  db_hive.user like xxx(已存在的表)，只拷贝表结构不拷贝表的数据; 
+				  LIKE existing_table_or_view_name
+				  [LOCATION hdfs_path];
+				 
+				data_type
+				  : primitive_type #原始数据类型 
+				  | array_type #数组类型
+				  | map_type	#Map数据类型 企业用的比较多
+				  | struct_type	#结构化类型
+				  | union_type  #粘合数据类型
+				 
+				primitive_type
+				  : TINYINT
+				  | SMALLINT
+				  | INT
+				  | BIGINT
+				  | BOOLEAN
+				  | FLOAT
+				  | DOUBLE
+				  | DOUBLE PRECISION -- (Note: Available in Hive 2.2.0 and later)
+				  | STRING
+				  | BINARY      -- (Note: Available in Hive 0.8.0 and later)
+				  | TIMESTAMP   -- (Note: Available in Hive 0.8.0 and later)
+				  | DECIMAL     -- (Note: Available in Hive 0.11.0 and later)
+				  | DECIMAL(precision, scale)  -- (Note: Available in Hive 0.13.0 and later)
+				  | DATE        -- (Note: Available in Hive 0.12.0 and later)
+				  | VARCHAR     -- (Note: Available in Hive 0.12.0 and later)
+				  | CHAR        -- (Note: Available in Hive 0.13.0 and later)
+				 
+				array_type
+				  : ARRAY < data_type >
+				 
+				map_type
+				  : MAP < primitive_type, data_type >
+				 
+				struct_type
+				  : STRUCT < col_name : data_type [COMMENT col_comment], ...>
+				 
+				union_type
+				   : UNIONTYPE < data_type, data_type, ... > 
+				 
+				row_format
+				  : DELIMITED [FIELDS TERMINATED BY char [ESCAPED BY char]] [COLLECTION ITEMS TERMINATED BY char]  #[FIELDS TERMINATED BY char [ESCAPED BY char]]：每一行中列与列之间的分隔符，如 DELIMITED FIELDS TERMINATED BY "\t"
+						[MAP KEYS TERMINATED BY char] [LINES TERMINATED BY char]
+						[NULL DEFINED AS char]   -- (Note: Available in Hive 0.13 and later)
+				  | SERDE serde_name [WITH SERDEPROPERTIES (property_name=property_value, property_name=property_value, ...)]
+				 
+				file_format:
+				  : SEQUENCEFILE
+				  | TEXTFILE    -- (Default, depending on hive.default.fileformat configuration) #最基本的
+				  | RCFILE      -- (Note: Available in Hive 0.6.0 and later)
+				  | ORC         -- (Note: Available in Hive 0.11.0 and later) #企业用到的
+				  | PARQUET     -- (Note: Available in Hive 0.13.0 and later) #企业用到的
+				  | AVRO        -- (Note: Available in Hive 0.14.0 and later)
+				  | INPUTFORMAT input_format_classname OUTPUTFORMAT output_format_classname
+				 
+				constraint_specification:
+				  : [, PRIMARY KEY (col_name, ...) DISABLE NOVALIDATE ]
+					[, CONSTRAINT constraint_name FOREIGN KEY (col_name, ...) REFERENCES table_name(col_name, ...) DISABLE NOVALIDATE 
+Hive创建数据库：
+				create database if not exsit db_hive_01 COMMENT 'this is database' location '/user/hive/lyz';
+Hive在企业中的应用大部分都是跟python联合使用：比如说创建一张只有一列的表，然后利用python将这列数据格式化处理加载到字表中
+Hive中的表的类型：
+				1.管理表：创建表什么也不加，指定hdfs目录不是必须的，默认的就是管理表。当我们删除表的时候，会删除表的数据与元数据
+				2.外部表（托管表）：创建表的时候需要加上 EXTERNAL 关键字并且必须指定hdfs目录。当我们删除表的时候，不会删除表数据，只是删除了表的元数据。
+									我们也可以不需要加载数据，前提条件是，我们创建表的时候指定表的location目录，这个目录下的数据格式要与我们创建表的格式一样，这样表的数据不用加载就能被查询出来
+									sql； create EXTERNAL table if not exists db_hive.log1(login_type int,login_user string,login_ip string,login_date string) ROW FORMAT DELIMITED FIELDS TERMINATED  BY '\t' LOCATION '/user/hive/authlog';
+				3.分区表：	分区表就是hdfs上的一个独立的文件夹该文件夹是分区表中的所有数据文件，hive分区就是分目录。	把大的数据分隔成更小的数据，利用where子句区分分区查询
+							创建表的时候需要加上 partitioned by (列名 列的类型)，加载数据的时候需要加上 partition (列名=值)，查询的时候
+							sql： 	create table if not exists db_hive.parlog(login_type int,login_user string,login_ip string,login_date string) PARTITIONED BY (day string)  ROW FORMAT DELIMITED FIELDS TERMINATED  BY '\t';
+									load data local inpath '/opt/data/authlog.csv' into table parlog partition(day=20180520);
+							*注意*：当我创建分区表的时候，在利用put直接将数据放到hdfs上的分区目录以后，那么存在mysql里的MetaStore里的元数据是不知道分区数据的存在的，所以我们查询分区数据
+									的时候是查询不到的，解决这个问题需要修复一下元数据，其中有两种方法：1.运行命令：msck repair table 分区表名
+																										2.运行命令：alter table 分区表 partition(分区字段=分区字段值)
+Hive对表的数据进行分析以后的结果导出：	1insert overwrite local directory '/opt/data/result'  ROW FORMAT DELIMITED FIELDS TERMINATED  BY '\t'  select * from parlog_1;	#统计结果输出到本地，并指定列与列的分隔符，行与行的分隔符																						
+										2.hive -e 'select * from db_hive.parlog_1' > /opt/data/result/result.txt
+Hive常见的查询语句：1.select * from kty;
+					2.select * from kty limit 5;							
+					3.select * from kty where  login_date between 1000 and 10000;
+Hive里的Import/Export操作：	1.Export table kty to '本地文件路径'
+							2.Import table kty from '本地文件路径'，前提是要存在这张表
+Hive里Hql里的排序排序语句：	1.order by ：跟sql里的功能是一样的，是对全局数据的排序仅仅只有一个reduce。 例如：select * from kty order by login_date；
+							2.sort by：对每个reduce内部数据进行排序，对全局的结果集是没有排序的。设置reduce执行个数：set mapreduce.job.reduce = 3 ;
+							3.distribute by：类似于MapReduce中分区partition，对数据进行分区，结合sort by使用，
+							4.cluster by：就是distribute by 跟sort by 的结合使用，前提是当distribute by跟sort by字段一样的时候就会用cluster by代替。
+						*注意* distribute by一定要在sort by之前
+							
+Hive里的UDF编程（User Define Functions：用户定义函数）：支持用户扩展hive的sql功能。一进一出，多进一出，一进多出。	
+														1.实现方式：集成UDF，实现evaluate 方法，该方法参数不推荐使用java类型，推荐使用Hadoop里的数据类型Text/...
+														2.在hive中怎么使用：CREATE FUNCTION myfunc AS 'myclass' USING JAR 'hdfs:///path/to/jar';
+														
+=======================================================================================================================================================================================
+Hive里的HiveServer：1.他是一个服务，启动方式在 ${HIVE_HOME}/bin/hiveserver2
+					2.利用beeline连接hiveserver2服务，执行${HIVE_HOME}/bin/beenline，然后运行 !connect jdbc:hive2://127.0.0.1:10000 root cnitsec 注意:有可能mysql的驱动包与低版本的hive不兼容就会出现hiveserver2启动失败
+					3.利用jdbc方式连接：利用java代码的方式实现与hive的交互
+					
+					
+=======================================================================================================================================================================================
+Hive的压缩：
+	MapReduce执行五大步骤：input -> map -> shuffe -> reduce -> output
+	map阶段进行压缩：数据量小，减少网络的IO
+	常见的压缩方式有以下几种：bzip2，gzip，lzo（12年13年用的最多）snappy（目前用的最多），
+							压缩比：bzip2 > gizp > lzo bzip2压缩效果最好，最节省空间
+							压缩速度：lzo > gizp > bzip2 lzo压缩速度最快
+============================================================================================================================================================================================
+Hive的数据存储；
+	[
+		[ROW FORMAT row_format] #指定行分隔方式，row_format在下边有对应的分隔方式
+		[STORED AS file_format]#指定文件的类型
+		 | STORED BY 'storage.handler.class.name' [WITH SERDEPROPERTIES (...)]  -- (Note: Available in Hive 0.6.0 and later)
+	]
+		 file_format:
+		  : SEQUENCEFILE #序列化的文件，hadoop本身支持的
+		  | TEXTFILE    -- (Default, depending on hive.default.fileformat configuration) #默认的文本文件，以行为存储格式
+		  | RCFILE      -- (Note: Available in Hive 0.6.0 and later) #以列存储格式
+		  | ORC         -- (Note: Available in Hive 0.11.0 and later) #企业用到的，以列为存储格式
+		  | PARQUET     -- (Note: Available in Hive 0.13.0 and later) #企业用到的，以列为存储格式，apache的顶级项目
+		  | AVRO        -- (Note: Available in Hive 0.14.0 and later)
+		  | INPUTFORMAT input_format_classname OUTPUTFORMAT output_format_classname
+					
+
+1.ORC格式存储：			
+	创建ORC表：
+			1.不设置压缩格式：	create table db_hive.mylog_orc(login_type int,login_user string,login_ip string,login_date string) ROW FORMAT DELIMITED FIELDS TERMINATED  BY '\t' STORED AS orc;
+								加载数据：insert into table mylog_orc select * from log;
+			2.设置压缩格式：	create table db_hive.mylog_orc_snappy(login_type int,login_user string,login_ip string,login_date string) ROW FORMAT DELIMITED FIELDS TERMINATED  BY '\t' STORED AS orc tblproperties ("orc.compress"="SNAPPY");
+								加载数据：insert into table mylog_orc_snappy select * from log;
+	
+2.PARQUET格式存储：
+	创建PARQUET表：create table db_hive.mylog_parquet(login_type int,login_user string,login_ip string,login_date string) ROW FORMAT DELIMITED FIELDS TERMINATED  BY '\t' STORED AS parquet ;					
+	加载数据：insert into table mylog_parquet select * from log;			
+					
+============================================================================================================================================================================================		
+Hive的优化：
+	1.大表拆分成字表
+	2.使用外部表，分区表
+	3.设置存储格式，使用压缩
+	4.优化Sql，
+	5.优化MapReduce
+				
+============================================================================================================================================================================================
+Hive查询执行计划
+	EXPLAIN select * from mylog;
+	
+Hive执行并行：	hive.exec.parallel=true
+				hive.exec.parallel.thread.number=8 (默认是8)
+					
+					
+	JVM重用：MapTask ReduceTask是在JVM上运行的 
+	JVM启动需要时间，一个容器里运行多个MapReduce，节约时间，通常设置不能超过9个   mapreduce.job.jvm.numtasks=9 提升三分十二的速度
+	设置Reduce个数：mapreduce.job.reduces=自己测试调优
+	推测运行：MapReduce在执行的时候有的快有的慢，所以当快的执行完以后，ResourceManager就会以为慢的坏掉了，然后就会在另外一个机器重新运行任务，所以导致重复运行任务消耗资源，或者是早晨死循环
+			设置三个参数;<property>  
+							<name>hive.mapred.reduce.tasks.speculative.execution</name>  
+							<value>false</value>  
+						</property>
+						
+						<property>  
+							<name>mapreduce.reduce.speculative</name>  
+							<value>false</value>  
+						</property>
+						
+						<property>  
+							<name>mapreduce.map.speculative</name>  
+							<value>false</value>  
+						</property>
+	动态分区的调整优化：		
+					
+优化：
+		1.fatchtask：在hive-site.xml配置	<property>
+												<name>hive.fetch.task.conversion</name>
+												<value>more</value>
+											</property>
+											
+		2.大表拆分成字表，使用外部表，分区表，设置存储格式，使用压缩，优化Sql，优化MapReduce
+					
+					
+		3.join优化：（1）Common Join:发生在Reduce阶段，所以也叫Reduce Join。大表对大表
+					（2）Map Join：发生在Map阶段，所以也叫Map Join 。大表对小表。大表的数据是在文件中读取的，小表的数据放在内存中，如下方法可以优化Map Join
+									①.通过DistributedCache类将小表放到内存当中去
+									②.通过设置set hive.auto.convert.join =true。自动判断大小表
+					（3）SMB（Sort-Merge-Bucket） Join：用的比较少，大表对大表，优化方式为：set hive.auto.convert.sortmerge.join=true;  
+																							set hive.optimize.bucketmapjoin = true;  
+																							set hive.optimize.bucketmapjoin.sortedmerge = true;  
+																							set hive.auto.convert.sortmerge.join.noconditionaltask=true;  
+					（4）group by：可能数据倾斜，解决办法：hive.groupby.skewindata=true.原理就是会生成两个Map Job，然后第一个Map Job先执行，然后结果随机分发到reduce上，每个reduce做部分
+																						聚合操作并输出结果，这样处理的好处就是相同的key可能分发到不同的reduce中，从而达到负载均衡的效果
+																						。第二个Map Job会根据预处理的第一个Job相同的Key分发到对应的reduce上，但是只针对代数聚合函数有效（count,sum等），
+																						对整体聚合函数无效(avg,mean等)，
+					（5）count（distinct field）：可能造成数据倾斜
+					
+		4.并行执行：Job与Job之间没有依赖关系可以使用并行执行，设置如下参数
+					set hive.exec.parallel=true
+					set hive.exec.parallel.thread.number=8 (默认是8，最大不超过20)			
+					
+		5.JVM重用：	MapTask ReduceTask都是在JVM上运行，一个Map任务一个JVM，一个Reduce任务一个JVM，启动JVM重启需要时间。一个JVM可以运行多个任务。		
+					set mapreduce.job.jvm.numtasks=9 提升三分十二的速度，最大不要超过9个。
+					
+		6.推测执行（属于MapReduce调优）：每个Reduce之间的执行时间相差太多的时候，ApplicationMaster就会在另外的机器上运行相同的任务，当那个先完成就用哪个结果，没完成的就被删除任务，设置如下：
+					<property>  
+						<name>hive.mapred.reduce.tasks.speculative.execution</name>  
+						<value>false</value>  
+					</property>
+					
+					<property>  
+						<name>mapreduce.reduce.speculative</name>  
+						<value>false</value>  
+					</property>
+					
+					<property>  
+						<name>mapreduce.map.speculative</name>  
+						<value>false</value>  
+					</property>
+		7.动态分区的调整：
+					
+Hive利用Python脚本格式化数据：
+		add FILE /opt/data/weekday_mapper.py; 
+		INSERT OVERWRITE TABLE u_data_new SELECT TRANSFORM (userid, movieid, rating, unixtime) USING 'python weekday_mapper.py' AS (userid, movieid, rating, weekday) FROM u_data;
+					
